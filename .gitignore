@@ -1,0 +1,9 @@
+# ignora tutto
+*
+
+# ma non ignorare questo .gitignore
+!.gitignore
+
+# mantieni SOLO questi due sorgenti finali
+!toolbox_definitivo.html
+!mappa_svg_definitiva.html

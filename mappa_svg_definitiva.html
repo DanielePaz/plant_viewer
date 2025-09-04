@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+</head>
+
+<style>
+
+    /* container mappa */
+    #map {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        position: relative;
+        overflow-y: auto;
+    }
+
+    .measurement-display {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        z-index: 1000;
+        max-width: 250px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+
+    #temp-measurement-display {
+        display: block; /* Modificato da none a block */
+        background: rgba(255, 255, 200, 0.9);
+        visibility: hidden; /* Inizialmente nascosto */
+    }
+    .leaflet-custom-textbox {
+        background: rgba(255, 255, 255, 0.9);
+        border: 2px solid #1978c8;
+        border-radius: 4px;
+        padding: 8px 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        min-width: 100px;
+    //max-width: 500px;
+        white-space: nowrap;
+        font-size: 14px !important;
+    //overflow: hidden;
+        position: relative;
+    }
+
+    .leaflet-custom-textbox .textbox-content {
+        cursor: text;
+        user-select: text;
+    }
+
+    .leaflet-tooltip-left.leaflet-custom-textbox::before {
+        right: 100%;
+        border-left-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .leaflet-tooltip-right.leaflet-custom-textbox::before {
+        left: 100%;
+        border-right-color: rgba(0, 0, 0, 0.4);
+    }
+    .leaflet-textbox-editable:focus {
+        background: white !important;
+        border: 2px solid #1978c8 !important;
+        outline: none;
+    }
+    .leaflet-textbox-editable {
+        transition: all 0.2s;
+        pointer-events: auto !important;
+        cursor: grab; /* Cambia cursore */
+        user-select: none; /* Previene selezione testo durante il drag */
+    }
+    .leaflet-textbox-editable:active {
+        cursor: grabbing;
+    }
+
+    .delete-textbox {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background: red;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        text-align: center;
+        /*cursor: pointer;*/
+        cursor: grab;
+        z-index: 1000;
+        display: none;
+    }
+
+    .leaflet-textbox-editable:hover .delete-textbox {
+        display: block;
+    }
+
+
+    .measure-value {
+        display: inline; /*AGGIUNTO*/
+        white-space: nowrap !important ; /* No ritorno a capo */
+        font-weight: bold;
+    }
+    .leaflet-measure-label .measure-unit {
+        font-weight: normal;
+        margin-left: 7px;
+        display: inline;
+        white-space: nowrap !important ;
+    }
+
+    .leaflet-measure-label .measure-value {
+        color: #0066cc;
+        display: inline;
+        white-space: nowrap !important ;
+
+    }
+
+
+    .leaflet-area-label .measure-value {
+        color: #cc3300;
+        white-space: nowrap !important ;
+        display: inline;
+
+    }
+
+
+    .measure-label-container {
+        display: flex;
+        /*flex-direction: column;*/
+        align-items: flex-start;
+        align-content: flex-start;
+        line-height: 1.2;
+        font-family: Arial, sans-serif;
+        /*white-space: nowrap !important;*/
+        flex-wrap : nowrap;
+
+    }
+    .measure-label-container div:nth-child(2) {
+        /*white-space: nowrap !important;*/
+        /*display: inline; */
+    }
+    /*PER GESTIRE CANCELLAIONE MISURE*/
+    .measure-deletable {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .measure-deletable:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+
+    /* Evidenziato durante la modalità cancellazione */
+    .leaflet-delete-mode .measure-deletable {
+        border: 1px dashed #ff0000;
+    }
+
+    /* eventi solo sui contenitori delle etichette */
+    .measure-deletable {
+        pointer-events: auto !important;
+        cursor: pointer;
+    }
+
+    /* Disabilita eventi sugli elementi padre */
+    .leaflet-measure-label-side,
+    .leaflet-area-label,
+    .leaflet-measure-label {
+        pointer-events: none !important;
+    }
+
+
+    .leaflet-textbox-editable {
+        /*Stile base del textbox */
+        min-width: 120px;
+        min-height: 60px;
+        background: transparent !important;
+        resize: none;
+        border: 1px solid transparent;
+
+
+        /* Gestione testo */
+        word-break: break-word;
+        white-space: pre-wrap;
+
+        /* Transizione fluida */
+        transition: all 0.15s ease-out;
+
+        cursor: pointer;
+
+
+        /* Bordi e padding */
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        padding: 8px;
+        outline: none;
+        overflow: hidden;
+    }
+
+
+    /* Bordi visibili solo durante l'interazione */
+    .leaflet-textbox-editable:focus,
+    .leaflet-textbox-editable:active {
+        /*border: 1px dashed #0078d7 !important;
+        box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);*/
+
+        border: 1px dashed #ffffff !important;
+        box-shadow: 0 0 0 2px rgb(255, 255, 255);
+        cursor: pointer;
+
+    }
+
+
+    /* durante il mouseover */
+
+    .leaflet-textbox-editable:hover {
+        /*border: 1px dashed rgba(0, 120, 215, 0.4); */
+        border: 1px dashed rgb(255, 255, 255);
+        cursor: pointer;
+
+    }
+
+
+
+    .leaflet-textbox-editable::-webkit-resizer {
+        display: none;
+        cursor : pointer;
+    }
+
+
+    .leaflet-draw-tooltip {
+        background: rgba(255, 255, 255, 0.9);
+
+        border: 1px solid #0078d7;
+        border-radius: 4px;
+        font-size: 13px;
+        padding: 4px 8px;
+        white-space: nowrap;
+    }
+
+    /* TOGLIE IL VALORE GRIGIO CHE APPARE NEL TOOLTIP DURANTE IL DISEGNO */
+    .leaflet-draw-tooltip-subtext {
+        display: none;
+    }
+
+    .leaflet-draw-tooltip {
+        font-size: 0 !important;
+    }
+    .leaflet-draw-tooltip:before {
+        display: none !important;
+    }
+
+    /*CSS PER TOOLTIP */
+    /* Stile per il tooltip delle misure dinamiche */
+
+    .leaflet-draw-tooltip-subtext {
+        background: rgba(255, 255, 255, 0.9) !important;
+        border: 1px solid #0078d7 !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        font-size: 13px !important;
+        color: #333 !important;
+        margin-top: 5px !important;
+        white-space: nowrap !important;
+        display: block !important; /* Forza la visualizzazione */
+    }
+
+    .leaflet-draw-tooltip {
+        font-size: 0 !important;
+    }
+    .leaflet-draw-tooltip:before {
+        display: none !important;
+    }
+    /*CSS PER VERSIONE 4 MISURE DINAMICHE */
+
+    .leaflet-draw-tooltip {
+        display: block !important;
+        /*background: rgba(255, 255, 255, 0.9) !important;*/
+        /*background: rgba(189, 27, 27, 0.9) !important;*/
+
+        background: rgb(85, 175, 65) !important;
+        border: 1px solid #0078d7 !important;
+        min-width: 120px !important;
+    }
+
+    /* Stile per il testo nel tooltip */
+    .leaflet-draw-tooltip-subtext {
+        display: block !important;
+        font-size: 13px !important;
+        color: #333 !important;
+        padding: 4px !important;
+        text-align: center !important;
+    }
+
+    /* Nascondi il testo predefinito */
+    .leaflet-draw-tooltip-single {
+        display: none !important;
+    }
+    /* ETICHETTA AREA CON DIV */
+    .leaflet-area-label {
+        transform: translate(calc(-90% - 80px), calc(-90% - 80px));
+        background-color: transparent;
+        /*border: 2px solid #0078d7;*/
+        /*border-radius: 4px;*/
+        /*padding: 4px 8px;*/
+        white-space: nowrap;
+        /*transform-origin: top left;*/
+        /*box-shadow: 0 0 5px rgba(0,0,0,0.2);*/
+
+    }
+    /*CSS PER ETICHETTA AREA CERCHIO CANCELLABILE */
+    .measure-area-label {
+
+        background: transparent !important;
+        color: #0078d7 !important;
+        font-weight: bold !important;
+        text-shadow: 0 0 2px white !important;
+        white-space: nowrap !important;
+    }
+
+    .measurement-popup {
+        font-size: 14px; line-height: 1.4; padding: 8px 12px; }
+
+    .measurement-popup .leaflet-popup-content-wrapper {
+        border-radius: 4px; }
+
+    .measurement-popup .leaflet-popup-content {
+        margin: 8px;
+    }
+    .measure-value {
+        font-weight: bold;
+    }
+    .measure-unit {
+        color: #666;
+        margin-left: 2px;
+    }
+
+    /* MOSTRARE MAP_SCALE IN BASSO A DESTRA SULLA MAPPA */
+    .map-scale-control {
+        background: rgba(255,255,255,0.9);
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font: 12px/1.2 Arial, sans-serif;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    .map-scale-control .map-scale-caption {
+        margin-top:2px; opacity:.85;
+    }
+
+    /*PER DISEGNI SU LAYERS DI POLYLINE E POLYGON */
+    .leaflet-draw-guides,
+    .leaflet-draw-guide-dash {
+        position: absolute;
+        z-index: 6500 !important;
+    }
+
+    .leaflet-draw-guide-dash {
+        /* niente background qui */
+        opacity: 0.95 !important;
+        width: 4px !important;
+        height: 4px !important;
+         border-radius: 50% !important;
+        box-shadow: 0 0 2px #fff;
+    }
+
+    path.draw-live {
+        vector-effect: non-scaling-stroke;
+        filter: drop-shadow(0 0 2px #fff);
+    }
+
+
+</style>
+
+<body>
+
+<!--<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>-->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+
+<div id="map"></div>
+<div id="temp-measurement-display" class="measurement-display"></div>
+<div id="final-measurement-display" class="measurement-display"></div>
+<script>
+  //ULTIMA REVISIONE DOPO RIUNIONE CON GIANNI E INDICAZIOMNI SU MODIFICHE
+  //RELATIVE AL FATTO CHE NON SALVAVA I PARAMETRI DELLE LINEE TRATTEGGIATE E CONTINUE
+  //E NEANCHE IL LIVELLO DI OPCITA'
+  //ADESSO FUNZIONA
+
+    const img_url = 'https://www.snap4city.org/dashboardSmartCity/img/synoptics/';
+    const MAP_SCALE = 5; // 1px = 0-5 metri per pixel
+    let map, drawLayer, currentDrawer, deleteHandler;
+    let tempPolyline = null; // Per memorizzare la forma temporanea durante il disegno
+    let textBoxes = new L.FeatureGroup();
+    const imageBounds = [[0,0], [424.8, 1396.8]];
+    let isDraggingTextBox = false;
+
+
+    let tempMeasureLayer = null;
+    let isDrawingActive = false;
+    let _drawVertexHandler = null;
+    let _deleteClickHandler = null;
+    let currentToolName = null;
+    let _guideStyleTag = null;
+
+
+
+
+
+    L.GeometryUtil = L.GeometryUtil || {};
+    function action(param) {
+
+        console.log('Funzione ACTION chiamata con:', param);
+
+
+        if (param && param.action === 'save') {
+            return handleSaveRequest();
+        }
+
+        //LOAD
+        else if (param && param.action === 'load') {
+            return handleLoadRequest(param.data);
+        }
+        else {
+
+            handleToolSelection(param);
+        }
+    }
+    window.action = action;
+    //MISURAZIONI FIGURE
+    function formatMeasurement(value, isArea = false) {
+        //return value.toFixed(2) + (isArea ? ' m²' : ' m');
+        const roundedValue = Math.round(value * 100) / 100;
+        const unit = isArea ? 'm²' : 'm';
+
+
+
+
+        return `<span class="measure-value">${roundedValue}</span><span class="measure-unit">${unit}</span>`;
+
+
+    }
+
+    function calculateSegmentLength(latLng1, latLng2) {
+        const dx = (latLng2.lng - latLng1.lng) * MAP_SCALE;
+        const dy = (latLng2.lat - latLng1.lat) * MAP_SCALE;
+        return Math.sqrt(dx*dx + dy*dy);
+    }
+    function calculatePolygonMeasurements(latlngs) {
+        const measurements = {
+            segments: [],
+            perimeter: 0,
+            area: 0
+        };
+
+
+        if (Array.isArray(latlngs[0]) && !(latlngs[0] instanceof L.LatLng)) {
+            latlngs = latlngs[0];
+        }
+
+
+        const first = L.latLng(latlngs[0]);
+        const last = L.latLng(latlngs[latlngs.length-1]);
+        const isClosed = latlngs.length > 2 ;
+
+// CALCOLO DEI SEGMENTI
+
+        const segmentCount = isClosed ? latlngs.length   : latlngs.length - 1;
+        for (let i = 0; i < segmentCount; i++) {
+            const nextIdx = (i + 1) % latlngs.length;
+            const segmentLength = calculateSegmentLength(latlngs[i], latlngs[nextIdx]);
+            measurements.segments.push(segmentLength);
+            measurements.perimeter += segmentLength;
+        }
+
+        //CALCOLO AREA
+        if (isClosed && latlngs.length >= 3) {
+            let area = 0;
+            for (let i = 0, j = latlngs.length-1; i < latlngs.length; j = i++) {
+                area += (latlngs[j].lng * latlngs[i].lat) - (latlngs[i].lng * latlngs[j].lat);
+            }
+            measurements.area = (Math.abs(area) / 2) * Math.pow(MAP_SCALE, 2);
+        }
+
+        return measurements;
+    }
+
+    function updateMeasurementDisplay(layer, isTemporary = false) {
+        if (!layer) return;
+
+
+
+        function registerZoomFont(marker) {
+            const root = marker.getElement();
+            if (!root) return;
+            // se usi un wrapper interno (measure-label-container), prendilo come target
+            //const target = root.querySelector('.measure-label-container') || root;
+
+
+            const target = root.querySelector('.measure-area-label')
+                || root.querySelector('.measure-label-container')
+                || root;
+
+            target.classList.add('zoom-font');
+            const cs = getComputedStyle(target);
+            target.dataset.baseFontPx = parseFloat(cs.fontSize) || 14;
+            if (window.applyZoomFontScale) window.applyZoomFontScale();
+        }
+        if (layer._measureLabels) {
+            layer._measureLabels.forEach(label => map.removeLayer(label));
+            layer._measureLabels = [];
+        }
+
+// --- VARIABILI DI POSIZIONAMENTO
+        const offsetX = 0.0001; // Spostamento orizzontale generale
+        const offsetY = 0.0001; // Spostamento verticale generale
+        const areaOffsetX = 0.0002; // Spostamento orizzontale area
+        const areaOffsetY = -0.0002; // Spostamento verticale area (negativo = sopra)
+        let content = '';
+        let measurements;
+        let centerLabel = null; // Per l'etichetta centrale dell'area
+
+// RECTANGLES
+        if (layer instanceof L.Rectangle) {
+            const bounds = layer.getBounds();
+            const latlngs = [
+                bounds.getSouthWest(),
+                bounds.getSouthEast(),
+                bounds.getNorthEast(),
+                bounds.getNorthWest(),
+                //bounds.getSouthWest() // Chiude il poligono
+            ];
+
+
+            const latlngsCopy = latlngs.slice();
+            latlngsCopy.push(latlngs[0]);
+            const measurements = calculatePolygonMeasurements(latlngsCopy);
+            content += `Larghezza: ${formatMeasurement(measurements.segments[0])}<br>`;
+            content += `Altezza: ${formatMeasurement(measurements.segments[1])}<br>`;
+            content += `<strong>Perimetro: ${formatMeasurement(measurements.perimeter)}</strong><br>`;
+            content += `<strong>Area: ${formatMeasurement(measurements.area, true)}</strong>`;
+
+
+            // Aggiungi etichette ai lati
+            if (!isTemporary) {
+                layer._measureLabels = [];
+                //for (let i = 0; i < measurements.segments.length; i++) {
+                for (let i = 0; i < 4; i++) {
+                    const start = latlngs[i];
+
+                    const end = latlngs[(i + 1) % 4];
+                    const midPoint = L.latLng(
+                        (start.lat + end.lat) / 2 + offsetY,
+                        (start.lng + end.lng) / 2  + offsetX
+                    );
+
+                    const label = L.marker(midPoint, {
+
+
+
+                        icon: L.divIcon({
+                            html: `<div class="measure-label-container measure-deletable">
+                         ${formatMeasurement(measurements.segments[i])}
+                          </div>`,
+                            className: 'leaflet-measure-label-side',
+                            iconSize: [null, null]
+                            //})
+
+                        }),
+                        interactive: true,
+                        bubblingMouseEvents: false,
+                        measureLabel: true //AGGIUNTO PER CANCELLARE SOLO MISURE RIMASTE SENZA DISEGNO
+                    }).addTo(map);
+                    layer._measureLabels.push(label);
+                    registerZoomFont(label); // [MOD] registra il nodo per font scaling
+                }
+                // POSIZIONARE L'AREA
+                const center = layer.getBounds().getCenter();
+                const areaPosition = L.latLng(
+                    center.lat + areaOffsetY,
+                    center.lng + areaOffsetX
+                );
+
+
+                centerLabel = L.marker(areaPosition, {
+
+                    icon: L.divIcon({
+                        html: `<div class="measure-label-container measure-deletable">
+                 <!--<div>Area= </div>-->
+                  <div>Area=${formatMeasurement(measurements.area, true)}</div>
+                  </div>`,
+                        className: 'leaflet-area-label',
+                        //className : ' ',
+                        iconSize: [null, null]
+                    }),
+                    interactive: true,
+                    bubblingMouseEvents: false,
+                    opacity: 0.9,
+                    zIndexOffset: 1000 // Priorità sopra le altre etichette
+
+                }).addTo(map);
+                layer._measureLabels.push(centerLabel);
+                registerZoomFont(centerLabel); // [MOD]
+            }
+        }
+// POLYLINE E POLYGONS
+        else if (layer instanceof L.Polyline) {
+            let latlngs = layer.getLatLngs();
+
+            // Gestione array annidato per Polygon
+            if (latlngs.length > 0 && Array.isArray(latlngs[0])) {
+                latlngs = latlngs[0];
+            }
+
+            //I POLIGONI
+            const isPolygon = layer instanceof L.Polygon;
+            //const measurements = calculatePolygonMeasurements(latlngs);
+            let coordsForCalculation = latlngs.slice();
+            if (isPolygon) coordsForCalculation.push(latlngs[0]);
+
+            measurements = calculatePolygonMeasurements(coordsForCalculation);
+
+// SINGOLA LINEA
+
+            if (latlngs.length === 2 && !isPolygon) {
+                content = `<strong>Lunghezza: ${formatMeasurement(measurements.segments[0])}</strong>`;
+                //}
+                // Aggiunta etichetta per singola linea
+                if (!isTemporary) {
+                    const midPoint = L.latLng(
+                        (latlngs[0].lat + latlngs[1].lat) / 2,
+                        (latlngs[0].lng + latlngs[1].lng) / 2
+                    );
+                    //layer._measureLabels = [
+                    const one =  L.marker(midPoint, {
+                        icon: L.divIcon({
+                            html:`<div class="measure-label-container measure-deletable">
+                                  <div>${formatMeasurement(measurements.segments[0])}<div>
+                                </div>`,
+                            className: 'leaflet-measure-label ',
+
+                            iconSize: [null, null]
+                        }),
+                        interactive: true,
+                        bubblingMouseEvents: false,
+                        measureLabel: true,
+                        zIndexOffset: 500
+                    }).addTo(map);
+                    layer._measureLabels = [one];
+                    registerZoomFont(one);
+
+                }
+
+            } // POLYLINE E POLYGON
+            else {
+                //const segmentCount = isPolygon ? measurements.segments.length : measurements.segments.length - 1;
+                const segmentCount = isPolygon ? measurements.segments.length -1 : measurements.segments.length -1 ;
+
+                for (let i = 0; i < segmentCount; i++) {
+                    content += `Lato ${i+1}: ${formatMeasurement(measurements.segments[i])}<br>`;
+                }
+
+                const totalLength = isPolygon ?
+                    formatMeasurement(measurements.perimeter) :
+                    //formatMeasurement(measurements.segments.reduce((sum, seg) => sum + seg, 0));
+                    formatMeasurement(measurements.segments.slice(0, -1).reduce((sum, seg) => sum + seg, 0));
+
+                content += `<strong>${isPolygon ? 'Perimetro' : 'Lunghezza totale'}: ${totalLength}</strong><br>`;
+                //content += `<strong>Perimetro: ${formatMeasurement(measurements.perimeter)}</strong><br>`;
+
+                //FUNZIONA L'AREA DEL POLIGONO
+                if (isPolygon && measurements.area > 0) {
+                    content += `<strong>Area: ${formatMeasurement(measurements.area, true)}</strong>`;
+                }
+
+                // Aggiungi etichette ai lati
+                if (!isTemporary) {
+                    layer._measureLabels = [];
+                    //const loopCount = isPolygon ? measurements.segments.length -1 : measurements.segments.length -1 ;
+                    //CORREZIONE PER PERIMETRO POLYLINE
+                    const loopCount = isPolygon ? measurements.segments.length - 1 : measurements.segments.length -1;
+                    for (let i = 0; i < loopCount ; i++) {
+                        // latlngs deve esistere
+                        if (!latlngs[i] || !latlngs[(i + 1) % latlngs.length]) {
+                            console.error("Coordinate non valide per il segmento", i);
+                            continue;
+                        }
+                        const start = latlngs[i];
+                        const end = latlngs[(i + 1) % latlngs.length];
+                        const midPoint = L.latLng(
+                            (start.lat + end.lat) / 2 +  offsetY,
+                            (start.lng + end.lng) / 2 + offsetX
+                        );
+
+
+                        const lbl = L.marker(midPoint, {
+                            icon: L.divIcon({
+                                html:`<div class="measure-label-container measure-deletable">
+
+                                         <div>${formatMeasurement(measurements.segments[i])}</div>
+                                           </div>`,
+                                //className: 'leaflet-measure-label-side',
+                                className: 'leaflet-measure-label ',
+                                iconSize: [null, null]
+                            }),
+                            interactive: true,
+                            bubblingMouseEvents: false,
+                            measureLabel: true
+
+                        }).addTo(map);
+                        layer._measureLabels.push(lbl);
+                        registerZoomFont(lbl);
+
+                    }
+
+
+                    if (isPolygon && measurements.area > 0) {
+                        const center = layer.getBounds().getCenter();
+                        //AGGIUNTO PER POSIZIONARE AREA
+                        const areaPosition = L.latLng(
+                            center.lat + areaOffsetY,
+                            center.lng + areaOffsetX
+                        );
+
+
+                        centerLabel = L.marker(areaPosition, {
+
+                            icon: L.divIcon({
+                                html: `<div class="measure-label-container measure-deletable">
+
+                   <div>Area=${formatMeasurement(measurements.area, true)}</div>
+                   </div>`,
+                                className: 'leaflet-area-label ',
+                                iconSize: [null, null]
+                            }),
+                            interactive: true,
+                            bubblingMouseEvents: false,
+                            measureLabel: true,
+                            opacity: 0.9,
+                            zIndexOffset: 1000
+                        }).addTo(map);
+                        layer._measureLabels.push(centerLabel);
+                        registerZoomFont(centerLabel);
+                    }
+                }
+            }
+        }
+
+//CIRCLE
+        else if (layer instanceof L.Circle) {
+            const radius = layer.getRadius() * MAP_SCALE;
+            const area = Math.PI * radius * radius;
+            const circumference =  2 * Math.PI * radius;
+            content = `Raggio: ${formatMeasurement(radius)}<br>`;
+            content += `Circonferenza: ${formatMeasurement(circumference)}<br>`;
+            content += `<strong>Area: ${formatMeasurement(area, true)}</strong>`;
+            //}
+
+
+
+// Etichetta per il raggio
+            if (!isTemporary) {
+
+                //AGGIUNTO PER AREA E RAGGIO POSIZIONARE
+                const radiusOffsetX = 0.00001;  // Spostamento orizzontale etichetta raggio
+                const radiusOffsetY = 0.0001;  // Spostamento verticale etichetta raggio
+
+                const center = layer.getLatLng();
+                console.debug("Posizione centro originale:", center.lat, center.lng);
+                //VALORI PER VERSIONE AREA CANCELLABILE
+                const areaOffsetX = -80; // px a sinistra
+                const areaOffsetY = -30; // px in alto
+
+
+
+                //PER POSIZIONAMENTO AREA CERCHIO
+                const newPosition = L.latLng(
+                    center.lat + areaOffsetY,
+                    center.lng + areaOffsetX
+                );
+                console.debug("Nuova posizione calcolata:", newPosition.lat, newPosition.lng);
+
+
+                const edgePoint = L.latLng(
+                    center.lat,
+                    center.lng + radius/MAP_SCALE
+                );
+                layer._measureLabels = [
+                    L.marker(L.latLng(
+                        (center.lat + edgePoint.lat)/2 + radiusOffsetY,
+                        (center.lng + edgePoint.lng)/2 + radiusOffsetX
+                    ), {
+
+
+
+                        icon: L.divIcon({
+                            html: `<div class="measure-label-container measure-deletable">
+
+                         <div>Raggio=${formatMeasurement(radius)}</div>
+                          </div>`,
+                            className: 'leaflet-measure-label',
+                            iconSize: [null, null]
+                        }),
+                        interactive: true,
+                        bubblingMouseEvents: false,
+                        measureLabel: true,
+                        zIndexOffset: 500
+                    }).addTo(map),
+
+                    L.marker(center, {
+                        icon: L.divIcon({
+                            html: `
+<div class="measure-label-container measure-deletable">
+  <div class="measure-area-label zoom-font"
+       style="background: transparent;
+              padding: 4px 8px;
+              color: #0078d7;
+              font-weight: bold;
+              text-shadow: 0 0 2px white;
+              pointer-events: auto;">
+    Area=${formatMeasurement(area, true)}
+  </div>
+</div>`,
+                            className: '',
+                            iconSize: [null, null],
+                            iconAnchor: [-areaOffsetX, -areaOffsetY]
+
+                        }),
+                        interactive: true,
+                        bubblingMouseEvents: false,
+                        measureLabel: true,
+                        opacity: 0.9,
+                        zIndexOffset: 1000
+                    }).addTo(map)
+                ];
+                layer._measureLabels.forEach(registerZoomFont);
+            }
+        }
+        if(isTemporary) {
+            document.getElementById('temp-measurement-display').innerHTML = content;
+        } else {
+
+
+            layer.bindPopup(content, {autoClose: false, closeOnClick: false});
+
+            layer.openPopup();
+        }
+    }
+    // INTERAZIONE MAPPA
+    function disableMapInteraction() {
+        if(!map) return;
+        map.dragging.disable();
+        map.touchZoom.disable();
+        map.scrollWheelZoom.disable();
+    }
+
+    function enableMapInteraction() {
+        if(!map) return;
+        map.off('click', handleMeasurementDeletion);
+        map.dragging.enable();
+        map.touchZoom.enable();
+        map.scrollWheelZoom.enable();
+    }
+
+    // CONVERSIONE in GeoJSON
+
+    function getDrawingsGeoJSON() {
+        const features = [];
+        const shapes = [];   // { id, feature, refLatLng }
+        const tbList = [];   // { pos, text, color, fontSize, fontFamily, _used:false }
+
+        // Punto di riferimento per ogni figura
+        const getRefPoint = (layer) => {
+            if (layer instanceof L.Circle)     return layer.getLatLng();
+            if (layer instanceof L.Rectangle)  return layer.getBounds().getCenter();
+            if (layer instanceof L.Polygon)    return layer.getBounds().getCenter();
+            if (layer instanceof L.Polyline) {
+                const pts = layer.getLatLngs().flat();
+                if (!pts.length) return null;
+                const avg = pts.reduce((a,p)=>({lat:a.lat+p.lat, lng:a.lng+p.lng}),{lat:0,lng:0});
+                return L.latLng(avg.lat/pts.length, avg.lng/pts.length);
+            }
+            return null;
+        };
+
+        //
+        let shapeCounter = 0;
+
+        drawLayer.eachLayer(function(layer) {
+            let feature = null;
+            let properties = {};
+
+            if (layer instanceof L.Polygon || layer instanceof L.Polyline) {
+                const latLngs = layer.getLatLngs();
+                const coordinates = (layer instanceof L.Polyline ? latLngs : latLngs[0]).map(ll => [ll.lng, ll.lat]);
+                const measurements = calculatePolygonMeasurements(layer instanceof L.Polyline ? latLngs : latLngs[0]);
+
+                if (layer instanceof L.Polygon) {
+                    const latLngsPoly = layer.getLatLngs()[0];
+                    const coordsPoly = latLngsPoly.map(p => [p.lng, p.lat]);
+
+                    properties = {
+                        shapeType: (layer instanceof L.Rectangle) ? "rectangle" : "polygon",
+                        color: layer.options.color,
+                        fillColor: layer.options.fillColor || null,
+                        weight: layer.options.weight,
+                        opacity: (typeof layer.options.opacity === 'number') ? layer.options.opacity : 1,
+                        dashArray: layer.options.dashArray || null,
+                        area: { value: measurements.area, unit: "m²" },
+                        perimeter: { value: measurements.perimeter, unit: "m" },
+                        sides: measurements.segments.length
+                    };
+
+                    if (layer instanceof L.Rectangle) {
+                        const minLength = Math.min(...measurements.segments);
+                        const maxLength = Math.max(...measurements.segments);
+                        properties.width  = { value: minLength, unit: "m" };
+                        properties.height = { value: maxLength, unit: "m" };
+                    }
+
+                    feature = {
+                        type: "Feature",
+                        properties,
+                        geometry: { type: "Polygon", coordinates: [coordsPoly] }
+                    };
+                } else if (layer instanceof L.Polyline) {
+                    properties = {
+                        shapeType: "polyline",
+                        color: layer.options.color,
+                        weight: layer.options.weight,
+                        opacity: (typeof layer.options.opacity === 'number') ? layer.options.opacity : 1,
+                        dashArray: layer.options.dashArray || null,
+                        length: { value: measurements.perimeter, unit: "m" },
+                        points: measurements.segments.length,
+                        segments: measurements.segments.map(length => ({ value: length, unit: "m" }))
+                    };
+
+                    feature = {
+                        type: "Feature",
+                        properties,
+                        geometry: { type: "LineString", coordinates }
+                    };
+                }
+            } else if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                const rawRadius = layer.getRadius();
+                const radius = rawRadius * MAP_SCALE;
+
+                properties = {
+                    shapeType: "circle",
+                    color: layer.options.color,
+                    fillColor: layer.options.fillColor || null,
+                    weight: layer.options.weight,
+                    opacity: (typeof layer.options.opacity === 'number') ? layer.options.opacity : 1,
+                    dashArray: layer.options.dashArray || null,
+                    rawRadius: rawRadius,
+                    radius:        { value: radius,        unit: "m" },
+                    diameter:      { value: radius * 2,    unit: "m" },
+                    circumference: { value: 2 * Math.PI * radius, unit: "m" },
+                    area:          { value: Math.PI * Math.pow(radius, 2), unit: "m²" }
+                };
+
+                feature = {
+                    type: "Feature",
+                    properties,
+                    geometry: { type: "Point", coordinates: [center.lng, center.lat] }
+                };
+            }
+
+            if (feature) {
+                const id = `shape_${++shapeCounter}`;
+                feature.properties = feature.properties || {};
+                feature.properties.id = id;
+                shapes.push({ id, feature, refLatLng: getRefPoint(layer) });
+            }
+        });
+
+        //  TEXTBOX
+        textBoxes.eachLayer(function(marker) {
+            const pos = marker.getLatLng();
+            const el  = marker.getElement();
+            const textEl = el ? el.querySelector('.leaflet-textbox-editable') : null;
+
+            //PER DIMENSIONI TEXTBOX
+            const w = textEl ? Math.round(textEl.offsetWidth  || textEl.getBoundingClientRect().width  || 0) : null;
+            const h = textEl ? Math.round(textEl.offsetHeight || textEl.getBoundingClientRect().height || 0) : null;
+
+
+            tbList.push({
+                pos,
+                text: (textEl ? textEl.textContent.trim() : '').toString(),
+                color: textEl ? textEl.style.color      : "#000000",
+                fontSize: textEl ? textEl.style.fontSize : "16px",
+                fontFamily: textEl ? textEl.style.fontFamily : "Arial",
+                widthPx: w,      //  salva larghezza
+                heightPx: h,     //  salva altezza
+                _used: false
+            });
+        });
+
+
+        const makeTbFeature = (tb, linkedId, linkDist) => ({
+            type: "Feature",
+            properties: {
+                shapeType: "textbox",
+                text: tb.text,
+                color: tb.color,
+                fontSize: tb.fontSize,
+                fontFamily: tb.fontFamily,
+                position: { lat: tb.pos.lat, lng: tb.pos.lng },
+                linkedTo: linkedId || null,
+                linkDistance: linkDist,
+                widthPx: tb.widthPx ?? null,   //   PER DIMENS TEXTBOX
+                heightPx: tb.heightPx ?? null  //   PER DIMENS TEXTBOX
+            },
+            geometry: { type: "Point", coordinates: [tb.pos.lng, tb.pos.lat] }
+        });
+
+        // TEXTBOX ALLA FIGURA PIU' VICINA
+        for (const s of shapes) {
+            features.push(s.feature);
+
+            if (!tbList.length) continue;
+
+            // TROVA IL TEXTBOX PIU' VICINO
+            let bestIdx = -1, bestD = Infinity;
+            for (let i = 0; i < tbList.length; i++) {
+                if (tbList[i]._used) continue;
+                if (!s.refLatLng) continue;
+                const d = map.distance(tbList[i].pos, s.refLatLng);
+                if (d < bestD) { bestD = d; bestIdx = i; }
+            }
+
+            if (bestIdx >= 0) {
+                const tb = tbList[bestIdx];
+                tb._used = true;
+                features.push(makeTbFeature(tb, s.id, bestD));
+            }
+        }
+
+        //  Accoda eventuali textbox rimasti
+        for (const tb of tbList) {
+            if (!tb._used) features.push(makeTbFeature(tb, null, null));
+        }
+
+        // AGGIUNTA METADATI
+        let username = "pippo";
+        $.ajax({
+            url: "https://www.snap4city.org/dashboardSmartCity/controllers/getAccessToken.php",
+            type: "GET",
+            dataType: 'json',
+            async: false
+        }).done(function(response) {
+            if (response && response.loggedUsername) {
+                username = response.loggedUsername;
+                console.log("Username recuperato:", username);
+            } else {
+                console.warn("Username non trovato nella risposta:", response);
+            }
+        }).fail(function(error) {
+            console.error("Errore nel recupero username:", error);
+        });
+
+        const proxyElement = document.querySelector('.leaflet-proxy.leaflet-zoom-animated');
+        let proxyScale = 1;
+        if (proxyElement) {
+            const transformStyle = proxyElement.style.transform || '';
+            const scaleMatch = transformStyle.match(/scale\(([^)]+)\)/);
+            if (scaleMatch && scaleMatch[1]) proxyScale = parseFloat(scaleMatch[1]);
+        }
+
+        return {
+            type: "FeatureCollection",
+            metadata: {
+                underlineGraph: window.location.href,
+                zoomLevel: map.getZoom(),
+                dateObserved: new Date().toISOString(),
+                username: username,
+                scale: proxyScale
+            },
+            features: features,
+            properties: {
+                mapScale: MAP_SCALE,
+                crs: {
+                    type: "Simple",
+                    properties: { bounds: imageBounds, units: "meters" }
+                }
+            }
+        };
+    }
+
+    function saveDrawings() {
+        const geoJSON = getDrawingsGeoJSON();
+        const jsonString = JSON.stringify(geoJSON, null, 2);
+
+        //Salva in localStorage
+        localStorage.setItem('savedDrawings', jsonString);
+
+        //Crea un download del file
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'mappa_salvataggio_' + new Date().toISOString().slice(0,10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        return jsonString;
+    }
+
+    // FUNZIONI UTILI PER IL LOAD
+
+    function handleLoadRequest(jsonData) {
+        console.log('Caricamento dati iniziato');
+        let featuresIn = [];
+        if (jsonData && Array.isArray(jsonData.features)) {
+            featuresIn = jsonData.features;
+        } else if (Array.isArray(jsonData)) {
+            featuresIn = jsonData;
+        } else if (jsonData && jsonData.type === 'Feature') {
+            featuresIn = [jsonData];
+            jsonData = { features: featuresIn, metadata: {} };
+        }
+
+        if (!featuresIn.length) {
+            console.error('Dati di caricamento non validi (features mancanti o vuote)');
+            return { status: 'error', message: 'Formato dati non valido: features mancanti' };
+        }
+
+        console.log("[DEBUG] Inizio caricamento Textbox - Features totali:", featuresIn.length);
+        featuresIn.forEach(f => {
+            if (f.geometry?.type === "Point" && f.properties?.shapeType === "textbox") {
+                console.log("[DEBUG] Trovato Textbox:", f);
+            }
+        });
+        try {
+            // pulizia dei layers
+            drawLayer.clearLayers();
+
+
+            if (textBoxes) { try { textBoxes.clearLayers(); } catch(e){} }
+            textBoxes = new L.FeatureGroup();
+            drawLayer.addLayer(textBoxes);
+
+            // carica le feature NELL'ORDINE del file
+            jsonData.features.forEach(feature => {
+                try {
+                    if (feature.geometry.type === "Polygon") {
+                        loadPolygonFeature(feature);
+                    }
+                    else if (feature.geometry.type === "rectangle") {
+                        loadRectangleFeature(feature);
+                    }
+                    else if (feature.geometry.type === "LineString") {
+                        loadPolylineFeature(feature);
+                    }
+                    else if (feature.geometry.type === "Point") {
+                        if (feature.properties.shapeType === "circle") {
+                            loadCircleFeature(feature);
+                        }
+                        else if (feature.properties.shapeType === "textbox") {
+                            loadTextboxFeature(feature);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Errore nel caricamento feature:', feature, error);
+                }
+            });
+
+            // ripristina zoom
+            if (jsonData.metadata && typeof jsonData.metadata.zoomLevel === 'number') {
+                map.setZoom(jsonData.metadata.zoomLevel);
+            }
+
+
+            if (jsonData.metadata && typeof jsonData.metadata.scale === 'number') {
+                try {
+                    const proxy = document.querySelector('.leaflet-proxy.leaflet-zoom-animated');
+                    if (proxy) {
+
+                        const current = proxy.style.transform || '';
+                        const t = current.replace(/scale\([^)]+\)/, '').trim();
+                        proxy.style.transform = (t ? (t + ' ') : '') + `scale(${jsonData.metadata.scale})`;
+                    }
+                } catch (e) {
+                    console.warn('Impossibile applicare proxy scale salvato:', e);
+                }
+            }
+
+
+            const bounds = L.latLngBounds([]);
+            try { if (drawLayer.getLayers().length)   bounds.extend(drawLayer.getBounds()); } catch(e){}
+            try { if (textBoxes.getLayers().length)   bounds.extend(textBoxes.getBounds()); } catch(e){}
+            if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+
+            console.log("[DEBUG] Textbox caricati nel layer:", textBoxes.getLayers().length);
+            textBoxes.getLayers().forEach(layer => {
+                console.log("[DEBUG] Textbox nel layer:", layer.getLatLng());
+            });
+            // Rimuove textbox con testo vuoto
+            try {
+                const toRemove = [];
+                textBoxes.eachLayer(layer => {
+                    const el = layer.getElement();
+                    const t  = el && el.querySelector('.leaflet-textbox-editable');
+                    if (t && !t.textContent.trim()) toRemove.push(layer);
+                });
+                toRemove.forEach(l => textBoxes.removeLayer(l));
+            } catch (e) {}
+            console.log('Caricamento completato con successo');
+            return { status: 'success', count: jsonData.features.length };
+
+        } catch (error) {
+            console.error('Errore durante il caricamento:', error);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+
+
+    function loadRectangleFeature(feature) {
+        const latLngs = feature.geometry.coordinates[0].map(coord => L.latLng(coord[1], coord[0]));
+        const rectangle = L.rectangle([latLngs[0], latLngs[2]], {
+            color: feature.properties.color,
+            fillColor: feature.properties.fillColor || 'transparent',
+            weight: feature.properties.weight || 3,
+            opacity: feature.properties.opacity || 1,
+            dashArray: feature.properties.dashArray || null
+        });
+        drawLayer.addLayer(rectangle);
+        updateMeasurementDisplay(rectangle);
+    }
+    function loadPolygonFeature(feature) {
+        const latLngs = feature.geometry.coordinates[0].map(coord => L.latLng(coord[1], coord[0]));
+        const options = {
+            color: feature.properties.color,
+            fillColor: feature.properties.fillColor || 'transparent',
+            weight: feature.properties.weight || 3,
+            opacity: feature.properties.opacity || 1,
+            dashArray: feature.properties.dashArray || null
+        };
+
+        const polygon = feature.properties.shapeType === "rectangle" ?
+            L.rectangle([latLngs[0], latLngs[2]], options) :
+            L.polygon(latLngs, options);
+
+        drawLayer.addLayer(polygon);
+        updateMeasurementDisplay(polygon);
+    }
+
+    function loadPolylineFeature(feature) {
+        const latLngs = feature.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+        const polyline = L.polyline(latLngs, {
+            color: feature.properties.color,
+            weight: feature.properties.weight || 3,
+            opacity: feature.properties.opacity || 1,
+            dashArray: feature.properties.dashArray || null
+        });
+        drawLayer.addLayer(polyline);
+        updateMeasurementDisplay(polyline);
+    }
+
+
+    function loadCircleFeature(feature) {
+        const center = L.latLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0]);
+
+
+        const radius =
+            (typeof feature.properties.rawRadius === 'number' ? feature.properties.rawRadius : null) ||
+            (feature.properties.radius && typeof feature.properties.radius.value === 'number' ? feature.properties.radius.value / MAP_SCALE : null) ||
+            (feature.properties.radius ? parseFloat(feature.properties.radius) / MAP_SCALE : null) ||
+            feature.properties.rawRadius;
+
+        const circle = L.circle(center, {
+            radius: radius,
+            color: feature.properties.color,
+            fillColor: feature.properties.fillColor || 'transparent',
+            weight: feature.properties.weight || 3,
+            opacity: feature.properties.opacity || 1,
+            dashArray: feature.properties.dashArray || null
+        });
+
+        drawLayer.addLayer(circle);
+        updateMeasurementDisplay(circle);
+    }
+
+    function wireTextboxHover(marker, textEl) {
+        function onOver() {
+            const isDelete = !!(deleteHandler && typeof deleteHandler.enabled === 'function' && deleteHandler.enabled());
+            // bordo visibile solo in hover; rosso se sei in modalità delete
+            textEl.style.border = isDelete ? '1px dashed #ff3333' : '1px dashed #1978c8';
+            textEl.style.cursor = 'pointer';  // mano
+        }
+        function onOut() {
+            textEl.style.border = '1px solid transparent'; // torna invisibile
+            textEl.style.cursor = 'text';
+        }
+        marker.on('mouseover', onOver);
+        marker.on('mouseout',  onOut);
+    }
+
+    // CARICAMENTO TEXTBOX
+
+    function loadTextboxFeature(feature) {
+        try {
+            if (!textBoxes) {
+                textBoxes = new L.FeatureGroup();
+                drawLayer.addLayer(textBoxes);
+            } else if (!map.hasLayer(textBoxes)) {
+                drawLayer.addLayer(textBoxes);
+            }
+
+            // Posizione
+            let lat, lng;
+            if (feature?.properties?.position) {
+                lat = feature.properties.position.lat;
+                lng = feature.properties.position.lng;
+            } else if (feature?.geometry?.type === 'Point' && Array.isArray(feature.geometry.coordinates)) {
+                lng = feature.geometry.coordinates[0];
+                lat  = feature.geometry.coordinates[1];
+            } else {
+                console.warn('[Textbox] Nessuna posizione valida nella feature:', feature);
+                return;
+            }
+            const position = L.latLng(lat, lng);
+
+            // Stile e  testo
+            const text       = String(feature?.properties?.text ?? "");
+            const color      = feature?.properties?.color      || "#000000";
+            const fontSize   = feature?.properties?.fontSize   || "16px";
+            const fontFamily = feature?.properties?.fontFamily || "Arial, sans-serif";
+
+            // dimensioni salvate
+            const savedW = parseInt(feature?.properties?.widthPx, 10);
+            const savedH = parseInt(feature?.properties?.heightPx, 10);
+            const hasSavedDims = Number.isFinite(savedW) && savedW > 0 && Number.isFinite(savedH) && savedH > 0;
+
+            // modificabile
+            const textEl = document.createElement('div');
+            textEl.className = 'leaflet-textbox-editable zoom-scaled';
+            textEl.contentEditable = true;
+
+            textEl.style.resize = 'both';
+            textEl.style.overflow = 'auto';
+
+
+            textEl.style.cssText = `
+   color: ${color};
+   font-size: ${fontSize};
+   font-family: ${fontFamily};
+   white-space: pre-wrap;
+   word-wrap: break-word;
+   /*overflow-wrap: break-word;*/
+   word-wrap: break-word; //
+   overflow: hidden; //
+   word-break: normal;
+   display: inline-block;
+   background: transparent !important;
+   border: 1px solid transparent !important;
+   box-shadow: none !important;
+   outline: none !important;
+   padding: 8px;
+   min-width: 60px;
+   min-height: 20px;
+   box-sizing: border-box;
+   cursor: text;
+ `;
+            textEl.textContent = text;
+
+            let w = 0, h = 0;
+
+            if (hasSavedDims) {
+                // usa dimensioni salvate
+                textEl.style.maxWidth = 'none';
+                textEl.style.width  = savedW + 'px';
+                textEl.style.height = savedH + 'px';
+                w = savedW;
+                h = savedH;
+            } else {
+                // solo se NON ci sono width/height salvati
+                const mapW  = (map && map.getContainer && map.getContainer().clientWidth) || 800;
+                const MAX_W = Math.max(90, Math.round(mapW * 0.3));
+                const MIN_W = 80;
+
+                const meas = document.createElement('div');
+                meas.style.cssText = `
+     position:absolute; left:-99999px; top:-99999px; visibility:hidden;
+     white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; word-break: normal;
+     font-size:${fontSize}; font-family:${fontFamily};
+     padding:8px; box-sizing:border-box;
+     width:auto; max-width:${MAX_W}px; min-width:${MIN_W}px;
+   `;
+                meas.textContent = text;
+                document.body.appendChild(meas);
+
+                w = Math.min(Math.max(meas.scrollWidth, MIN_W), MAX_W);
+                h = meas.scrollHeight;
+                document.body.removeChild(meas);
+
+                textEl.style.maxWidth = MAX_W + 'px';
+                textEl.style.width    = w + 'px';
+                textEl.style.height   = h + 'px';
+            }
+
+
+            const icon = L.divIcon({
+                className: 'leaflet-textbox-wrapper',
+                html: textEl,
+                iconSize: [w, h]
+            });
+
+            const marker = L.marker(position, {
+                icon,
+                draggable: true,
+                pane: 'markerPane',
+                zIndexOffset: 1000
+            });
+
+            // hover e delete
+            wireTextboxHover(marker, textEl);
+            marker.on('click', function(e) {
+                if (deleteHandler && typeof deleteHandler.enabled === 'function' && deleteHandler.enabled()) {
+                    textBoxes.removeLayer(marker);
+                    L.DomEvent.stop(e);
+                }
+            });
+
+            marker.on('dragstart', function() { textEl.style.userSelect = 'none';  textEl.style.cursor = 'grabbing'; });
+            marker.on('dragend',   function() { textEl.style.userSelect = 'auto';  textEl.style.cursor = 'text';     });
+
+            textBoxes.addLayer(marker);
+
+
+            setTimeout(() => { try { marker.update(); } catch(_){} }, 0);
+
+        } catch (e) {
+            console.error("Errore durante il caricamento del Textbox:", e);
+        }
+    }
+
+    //FUNZIONE PER GESTIRE CANCELLAZIONI MISURE
+
+    function handleMeasurementDeletion(e) {
+        // Trova l'elemento cliccato
+        const clickedLabel = e.originalEvent.target.closest('.measure-deletable');
+        if (!clickedLabel) return;
+
+        //  Trova il marker padre
+        const marker = Object.values(map._layers).find(layer => {
+            return layer._icon && layer._icon.contains(clickedLabel);
+        });
+        if (!marker) return;
+
+        // Trova il layer geometrico associato
+        const shapeLayer = drawLayer.getLayers().find(layer => {
+            return layer._measureLabels && layer._measureLabels.includes(marker);
+        });
+        if (!shapeLayer) return;
+
+        // Rimuove tutte le misure del layer
+        shapeLayer._measureLabels.forEach(label => map.removeLayer(label));
+        shapeLayer._measureLabels = [];
+
+
+        L.DomEvent.stop(e);
+        console.log("Misurazioni cancellate con successo");
+    }
+
+
+
+
+    //FUNZIONE PER CANCELLARE LE MISURE SENZA DISEGNO
+    function clearOrphanedMeasurements() {
+        // tutti i layer di disegno esistenti
+        const existingLayers = new Set(drawLayer.getLayers());
+
+        // Cerca in tutti i marker di misurazione
+        Object.values(map._layers).forEach(layer => {
+            if (layer instanceof L.Marker && layer.options.measureLabel) {
+                // 3. Verifica se il layer padre esiste ancora
+                let hasParent = false;
+                existingLayers.forEach(parentLayer => {
+                    if (parentLayer._measureLabels?.includes(layer)) {
+                        hasParent = true;
+                    }
+                });
+
+                // se non c'è il padre viene rimosso
+                if (!hasParent) {
+                    map.removeLayer(layer);
+                }
+            }
+        });
+    }
+
+
+
+    function clearDynamicMeasurements() {
+        if (tempMeasureLayer) {
+            if (tempMeasureLayer._measureLabels) {
+                tempMeasureLayer._measureLabels.forEach(label => {
+                    if (map.hasLayer(label)) map.removeLayer(label);
+                });
+            }
+            tempMeasureLayer = null;
+        }
+        document.getElementById('temp-measurement-display').innerHTML = '';
+    }
+
+    function attachDrawVertex(tool) {
+        if (_drawVertexHandler) {
+            map.off('draw:drawvertex', _drawVertexHandler);
+            _drawVertexHandler = null;
+        }
+        _drawVertexHandler = function(e) {
+            if (!isDrawingActive) return;
+
+
+            const group = e.layers || (e.layer ? L.featureGroup([e.layer]) : null);
+            if (!group) return;
+
+            group.eachLayer(layer => updateDynamicMeasurements(layer, tool));
+        };
+        map.on('draw:drawvertex', _drawVertexHandler);
+    }
+
+
+    // STRUMENTI TOOL DI DISEGNO
+
+    //FUNZIONI PER  DISEGNI SU LAYERS DI POLYLINE E POLYGON
+    function setLiveGuideColor(color) {
+        if (!_guideStyleTag) {
+            _guideStyleTag = document.createElement('style');
+            _guideStyleTag.id = 'live-guide-color-style';
+            document.head.appendChild(_guideStyleTag);
+        }
+        _guideStyleTag.textContent = `.leaflet-draw-guide-dash{background:${color} !important;}`;
+    }
+
+    function clearLiveGuideColor() {
+        if (_guideStyleTag) _guideStyleTag.textContent = '';
+    }
+
+
+    function handleToolSelection(data) {
+        console.group("Dati ricevuti dal toolbox");
+        console.log("Strumento selezionato:", data.tool);
+        console.log("Parametri testo:", {
+            testo: data.labelText, colore: data.fontColor, dimensione: data.fontSize, font: data.fontFamily
+        });
+        console.groupEnd();
+
+        if (!map) { console.error("Mappa o layer non inizializzati"); return null; }
+
+        clearDynamicMeasurements(); // cancella le misure temporanee
+
+        //
+        if (data && data.tool && currentToolName === data.tool && currentDrawer) {
+            const newShape = {
+                color: data.color,
+                weight: data.width,
+                opacity: 1 - (data.transparency / 100),
+                fillOpacity: (1 - (data.transparency / 100)) * 0.2,
+                dashArray: data.style === 'dashed' ? '10,5' : (data.style === 'dotted' ? '2,5' : null)
+            };
+            currentDrawer.options = currentDrawer.options || {};
+            currentDrawer.options.shapeOptions = Object.assign({}, currentDrawer.options.shapeOptions || {}, newShape);
+            console.log('[style-update] shapeOptions aggiornate senza ricreare il tool');
+            return;
+        }
+
+        //disattiva hadler
+        if (currentDrawer) {
+            try { if (currentDrawer._enabled) currentDrawer.disable(); } catch(_) {}
+            currentDrawer = null;
+            currentToolName = null;
+        }
+
+        if (deleteHandler) {
+            try { deleteHandler.disable(); } catch(_) {}
+            deleteHandler = null;
+            if (_deleteClickHandler) { map.off('click', _deleteClickHandler); _deleteClickHandler = null; }
+            enableMapInteraction();
+        }
+
+        if (!(data && data.tool)) {
+            console.log("Nessun tool selezionato. Mappa in modalità navigazione.");
+            enableMapInteraction();
+            return;
+        }
+
+        disableMapInteraction();
+
+        // MODALITA' DELETE
+        if (data.tool === 'delete') {
+            console.log('Attivo lo strumento: delete');
+            clearOrphanedMeasurements();
+
+            deleteHandler = new L.EditToolbar.Delete(map, { featureGroup: drawLayer });
+
+            if (_deleteClickHandler) { map.off('click', _deleteClickHandler); _deleteClickHandler = null; }
+            _deleteClickHandler = handleMeasurementDeletion;
+            map.on('click', _deleteClickHandler);
+
+            deleteHandler.on('enabled',  () => console.log('Modalità cancellazione attivata'));
+            deleteHandler.on('disabled', () => {
+                console.log('Modalità cancellazione disattivata');
+                if (_deleteClickHandler) { map.off('click', _deleteClickHandler); _deleteClickHandler = null; }
+                enableMapInteraction();
+            });
+
+            deleteHandler.enable();
+            return;
+        }
+
+        // Textbox
+        if (data.tool === 'freetext') {
+            createTextBox(data);
+            console.log(`Attivo lo strumento PER IL TEXTBOX: ${data.fontSize}`);
+            return;
+        }
+
+        // Opzioni di stile per le forme
+        const shapeOptions = {
+            color: data.color,
+            weight: data.width,
+            opacity: 1 - (data.transparency / 100),
+            fillOpacity: (1 - (data.transparency / 100)) * 0.2,
+            dashArray: data.style === 'dashed' ? '10,5' : (data.style === 'dotted' ? '2,5' : null)
+        };
+
+        // crea l'handler per il tool richiesto
+        switch (data.tool) {
+            case 'rectangle': currentDrawer = new L.Draw.Rectangle(map, { shapeOptions }); break;
+            case 'polyline':  currentDrawer = new L.Draw.Polyline(map,  { shapeOptions, className: 'draw-live'}); break;
+            case 'polygon':   currentDrawer = new L.Draw.Polygon(map,   { shapeOptions, className: 'draw-live'}); break;
+            case 'circle':    currentDrawer = new L.Draw.Circle(map,    { shapeOptions }); break;
+            default:
+                console.warn("Tool non gestito:", data.tool);
+                enableMapInteraction();
+                return;
+        }
+
+
+        currentToolName = data.tool;
+        attachDrawVertex(data.tool);
+
+        currentDrawer.on('drawstart', () => {
+
+            isDrawingActive = true;
+
+            setTimeout(() => {
+                if (currentDrawer._poly && currentDrawer._poly.bringToFront) {
+                    currentDrawer._poly.bringToFront();
+                }
+                if (currentDrawer._markerGroup && currentDrawer._markerGroup.bringToFront) {
+                    currentDrawer._markerGroup.bringToFront();
+                }
+            }, 0);
+
+            // sincronizza del colore con quello del toolbox
+            const guideColor = (shapeOptions && shapeOptions.color) ? shapeOptions.color : '#111';
+            setLiveGuideColor(guideColor);
+            tempMeasureLayer = new L.FeatureGroup();
+            map.addLayer(tempMeasureLayer);
+        });
+
+        currentDrawer.on('drawcreated', (e) => {
+
+            isDrawingActive = false;
+            clearLiveGuideColor();
+
+
+            const layer = e.layer;
+            drawLayer.addLayer(layer);
+
+
+            if (tempMeasureLayer) { map.removeLayer(tempMeasureLayer); tempMeasureLayer = null; }
+        });
+
+        currentDrawer.on('drawstop', () => {
+
+            isDrawingActive = false;
+            console.log("DRAWSTOP di Leaflet.draw");
+            clearLiveGuideColor();
+
+            if (tempMeasureLayer) { map.removeLayer(tempMeasureLayer); tempMeasureLayer = null; }
+
+            if (_drawVertexHandler) { map.off('draw:drawvertex', _drawVertexHandler); _drawVertexHandler = null; }
+
+
+            try { if (currentDrawer && currentDrawer._enabled) currentDrawer.disable(); } catch(_) {}
+            enableMapInteraction();
+        });
+
+        // Avvia il tool
+        currentDrawer.enable();
+    }
+
+
+
+
+    //
+    function handleSaveRequest() {
+        console.log('Elaborazione richiesta salvataggio');
+
+        try {
+            const geoJSON = getDrawingsGeoJSON();
+            const jsonString = JSON.stringify(geoJSON, null, 2);
+
+            //DEBUG CONSOLE PER DATI SALVATI
+            console.log('Dati salvati:', jsonString);
+
+            // 2. Crea un download automatico del file
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mappa_salvataggio_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            // INVIO AL TOOLBOX, NON USATO DA TOGLIERE
+            if (window.parent) {
+                window.parent.postMessage({
+                    action: 'saveComplete',
+                    status: 'success',
+                    timestamp: new Date().toISOString()
+                }, '*');
+            }
+
+            return true;
+        } catch (e) {
+            console.error('Errore durante il salvataggio:', e);
+
+            if (window.parent) {
+                window.parent.postMessage({
+                    action: 'saveComplete',
+                    status: 'error',
+                    error: e.message
+                }, '*');
+            }
+
+            return false;
+        }
+    }
+
+
+    //VERSIONE PER CREARE IL TOOLBOX
+    function createTextBox(data) {
+        if (!map || !L || !textBoxes) {
+            console.error("Mappa o layer non inizializzati");
+            return null;
+        }
+
+        const options = {
+            // text: '',
+            text: data.text || '',
+            color: data.fontColor,
+            size: data.fontSize,
+            family: data.fontFamily,
+            position: map.getCenter(),
+            noAutoFocus: data.noAutoFocus || false
+        };
+
+        // Elemento editabile principale
+        const textEl = document.createElement('div');
+        textEl.className = 'leaflet-textbox-editable';
+
+        textEl.classList.add('zoom-scaled');
+        textEl.contentEditable = true;
+        textEl.style.cssText = `
+    color: ${options.color};
+   font-size: ${options.size};
+    font-family: ${options.family};
+     min-width: 40px;
+    min-height: 20px;
+    padding: 8px;
+    background: transparent !important;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+     outline: none;
+
+     word-wrap: break-word;
+     white-space: pre-wrap;
+     border-radius: 4px;
+    box-sizing:border-box;
+     `;
+
+
+        // DEBUG PER TEXTBOX
+        const marker = L.marker(options.position, {
+            draggable: true,
+            autoPan: true,
+            icon: L.divIcon({
+                html: textEl,
+                className: '',
+                iconSize: null
+            })
+        }).addTo(textBoxes);
+
+        wireTextboxHover(marker, textEl);
+        // Variabili per gestire lo stato
+        let isEditing = false;
+        let isDragging = false;
+        let isResizing = false;
+        let currentWidth = 150;
+        let currentHeight = 60;
+        let startX, startY, startWidth, startHeight;
+
+        //dimensioni iniziali
+        textEl.style.width = currentWidth + 'px';
+        textEl.style.height = currentHeight + 'px';
+
+        // Gestione focus/blur
+        textEl.addEventListener('focus', function() {
+            isEditing = true;
+            this.style.border = '1px dashed #0078d7';
+            this.style.boxShadow = '0 0 0 2px rgba(0, 120, 215, 0.2)';
+        });
+
+        textEl.addEventListener('blur', function() {
+            isEditing = false;
+            //this.style.border = '1px solid rgba(0, 0, 0, 0.2)';// COMMENTATO PER BORDI INATTIVO
+            this.style.border = '1px solid transparent';
+            this.style.boxShadow = 'none';
+            currentWidth = this.offsetWidth;
+            currentHeight = this.offsetHeight;
+        });
+
+
+        // gestione ridimensionamento
+        textEl.addEventListener('mousedown', function(e) {
+            const isOnRightEdge = e.offsetX > this.offsetWidth - 10;
+            const isOnBottomEdge = e.offsetY > this.offsetHeight - 10;
+            const isOnBorder = e.offsetX < 5 || e.offsetX > this.offsetWidth - 5 ||
+                e.offsetY < 5 || e.offsetY > this.offsetHeight - 5;
+
+            // CASO DEL TEXTBOX INATTIVO
+            textEl.addEventListener('mouseleave', function() {
+                if (!isEditing && !isDragging && !isResizing) {
+                    this.style.border = '1px solid transparent';  // Nasconde i bordi quando il mouse esce
+                }
+            });
+
+            if (isOnRightEdge && isOnBottomEdge) {
+                // Ridimensionamento dall'angolo
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startWidth = this.offsetWidth;
+                startHeight = this.offsetHeight;
+                document.addEventListener('mousemove', handleResize);
+                document.addEventListener('mouseup', stopResize);
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (isOnBorder && !isEditing) {
+                // Trascinamento dal bordo
+                isDragging = true;
+                this.style.userSelect = 'none';
+                marker.dragging.enable();
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+
+        function handleResize(e) {
+            if (!isResizing) return;
+
+            const newWidth = Math.max(40, startWidth + (e.clientX - startX));
+            const newHeight = Math.max(20, startHeight + (e.clientY - startY));
+
+            textEl.style.width = newWidth + 'px';
+            textEl.style.height = newHeight + 'px';
+            marker.update();
+        }
+
+        function stopResize() {
+            isResizing = false;
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopResize);
+            currentWidth = textEl.offsetWidth;
+            currentHeight = textEl.offsetHeight;
+        }
+
+        // trascinamento
+        marker.on('dragstart', function() {
+            isDragging = true;
+            textEl.style.userSelect = 'none';
+            textEl.style.cursor = 'grabbing';
+        });
+
+        marker.on('dragend', function() {
+            isDragging = false;
+            textEl.style.userSelect = 'auto';
+            textEl.style.cursor = 'text';
+        });
+
+        // Feedback visivo durante il mouseover
+        textEl.addEventListener('mousemove', function(e) {
+            const isOnRightEdge = e.offsetX > this.offsetWidth - 10;
+            const isOnBottomEdge = e.offsetY > this.offsetHeight - 10;
+
+            if (isOnRightEdge && isOnBottomEdge) {
+                this.style.cursor = 'se-resize';
+            } else if (e.offsetX < 5 || e.offsetX > this.offsetWidth - 5 ||
+                e.offsetY < 5 || e.offsetY > this.offsetHeight - 5) {
+                this.style.cursor = 'move';
+            } else {
+                this.style.cursor = 'text';
+            }
+        });
+
+        // Ottimizzazione adattamento testo
+        textEl.addEventListener('input', function() {
+            if (this.scrollHeight > this.offsetHeight) {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+                marker.update();
+            }
+        });
+
+        // Cancellazione con tool delete
+        marker.on('click', function(e) {
+            if (deleteHandler && deleteHandler.enabled()) {
+                textBoxes.removeLayer(marker);
+                L.DomEvent.stop(e);
+            }
+        });
+
+
+        // Focus automatico in modalità caricamento
+        if (!options.noAutoFocus) {
+            setTimeout(() => {
+                if (document.body.contains(textEl)) {
+                    textEl.focus();
+                    try {
+                        const range = document.createRange();
+                        range.selectNodeContents(textEl);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    } catch (e) {
+                        console.log("Selezione testo non riuscita", e);
+                    }
+                }
+            }, 50);
+
+        }
+        return marker;
+    }
+    function initTextBoxes() {
+        textBoxes.addTo(map);
+
+
+        deleteHandler = new L.EditToolbar.Delete(map, {
+            featureGroup: textBoxes
+        });
+    }
+
+    //calcolo delle distanze
+    function setupScaledMeasurements() {
+        // Salva la funzione originale
+        const originalDistance = L.GeometryUtil.length;
+
+        // Sovrascrivi con la versione scalata
+        L.GeometryUtil.length = function(latlngs) {
+            const originalLength = originalDistance.call(this, latlngs);
+            return originalLength * MAP_SCALE;
+        };
+
+        console.log(" Misure scalate con MAP_SCALE:", MAP_SCALE);
+    }
+
+
+    //PER INTERCETTARE TUTTI I TOOLTIP
+    function interceptAllDrawTooltips() {
+        if (!L.Draw) return;
+
+
+        try {
+            if (L.drawLocal?.draw?.handlers?.circle?.tooltip) {
+                L.drawLocal.draw.handlers.circle.tooltip.radius = 'Raggio';
+            }
+        } catch (e) {}
+
+
+        const fmtLen = (meters) => (meters * MAP_SCALE).toFixed(2) + ' m';
+        const sumDist = (map, pts) => {
+            let tot = 0;
+            for (let i = 1; i < pts.length; i++) tot += map.distance(pts[i - 1], pts[i]);
+            return tot;
+        };
+
+
+
+        /* ------------------------- CERCHIO ------------------------- */
+        if (L.Draw.Circle) {
+
+            const _origOnMouseMove = L.Draw.Circle.prototype._onMouseMove;
+            L.Draw.Circle.prototype._onMouseMove = function (e) {
+
+                if (_origOnMouseMove) _origOnMouseMove.call(this, e);
+
+
+                if (!this._tooltip) this._createTooltip();
+                const start = this._startLatLng;
+                const curr  = (e && e.latlng) || this._currentLatLng || (this._mouseMarker && this._mouseMarker.getLatLng());
+                if (start && curr) {
+                    const r = this._map.distance(start, curr);     // raggio NON SCALATO
+                    const text    = L.drawLocal?.draw?.handlers?.circle?.tooltip?.start || '';
+                    const subtext = 'Raggio: ' + fmtLen(r);        // << SCALATO
+                    this._tooltip.updateContent({ text, subtext });
+                    this._tooltip.updatePosition(curr);
+                }
+            };
+        }
+        /* ------------------------ POLYLINE ------------------------ */
+        // Mostra: ultimo segmento, totale parziale, e lista di tutti i segmenti
+        if (L.Draw.Polyline) {
+            L.Draw.Polyline.prototype._getTooltipText = function () {
+                const tip = { text: L.drawLocal.draw.handlers.polyline.tooltip.start, subtext: '' };
+
+                const markers = this._markers || [];
+                let pts = markers.map(m => m.getLatLng());
+                if (this._currentLatLng) pts = pts.concat(this._currentLatLng);
+
+                if (pts.length > 1) {
+                    // calcola tutte le lunghezze dei segmenti
+                    const segLens = [];
+                    for (let i = 1; i < pts.length; i++) {
+                        segLens.push(this._map.distance(pts[i - 1], pts[i]));
+                    }
+                    const total = segLens.reduce((a, b) => a + b, 0);
+                    const lastSeg = segLens.length ? segLens[segLens.length - 1] : 0;
+
+                    const segList = segLens.map((d, i) => `[${i + 1}] ${fmtLen(d)}`).join(' | ');
+
+                    tip.subtext =
+                        `Ultimo: ${fmtLen(lastSeg)} | Totale parziale: ${fmtLen(total)}`
+                        + (segLens.length ? `<br>Segmenties: ${segList}` : '');
+                }
+                return tip;
+            };
+        }
+
+        /* ------------------------- POLIGONO------------------------- */
+        if (L.Draw.Polygon) {
+            L.Draw.Polygon.prototype._getTooltipText = function () {
+                const tip = { text: L.drawLocal.draw.handlers.polygon.tooltip.start, subtext: '' };
+
+                // punti già posati + punto corrente
+                let pts = this._markers.map(m => m.getLatLng());
+                if (this._currentLatLng) pts = pts.concat(this._currentLatLng);
+
+                if (pts.length > 1) {
+                    // lunghezze lato per lato
+                    const segLens = [];
+                    for (let i = 1; i < pts.length; i++) {
+                        segLens.push(this._map.distance(pts[i - 1], pts[i]));
+                    }
+                    const perim = segLens.reduce((a, b) => a + b, 0);
+
+                    const segStr = segLens
+                        .map((d, i) => `[${i + 1}] ${fmtLen(d)}`)
+                        .join(' | ');
+
+                    tip.subtext = `Lati: ${segStr}<br>Perimetro (parziale): ${fmtLen(perim)}`;
+                }
+                return tip;
+            };
+        }
+
+        /* ------------------------ RETTANGOLO------------------------ */
+        if (L.Draw.Rectangle) {
+            L.Draw.Rectangle.prototype._getTooltipText = function () {
+                const tip = { text: L.drawLocal.draw.handlers.rectangle.tooltip.start, subtext: '' };
+                if (this._shape) {
+                    const b = this._shape.getBounds();
+                    const w = this._map.distance(
+                        L.latLng(b.getNorth(), b.getWest()),
+                        L.latLng(b.getNorth(), b.getEast())
+                    );
+                    const h = this._map.distance(
+                        L.latLng(b.getNorth(), b.getWest()),
+                        L.latLng(b.getSouth(), b.getWest())
+                    );
+                    tip.subtext = 'Lati: ' + fmtLen(w) + ' × ' + fmtLen(h);
+                }
+                return tip;
+            };
+        }
+
+        console.log('applicati tooltip (cerchio, polyline, poligono, rettangolo).');
+    }
+    // Fix specifico per Polygon
+    function fixPolygonTooltip() {
+        if (!L.Draw.Polygon) return;
+
+        const origOnMouseMove = L.Draw.Polygon.prototype._onMouseMove;
+        L.Draw.Polygon.prototype._onMouseMove = function (e) {
+            if (!this._tooltip) this._createTooltip();
+            origOnMouseMove.call(this, e);
+
+            if (this._tooltip && e.latlng) {
+                this._tooltip._container.style.display = 'block';
+                this._tooltip.updatePosition(e.latlng);
+            }
+        };
+
+        console.log(' Polygon tooltip: fix attivato.');
+    }
+
+    //FUNZIONE PER AGGIUNGERE MAP_SCALE IN BASSO A DESTRA
+    function addMapScaleControl() {
+        const MapScaleControl = L.Control.extend({
+            options: { position: 'bottomright' },
+            onAdd: function () {
+                const div = L.DomUtil.create('div', 'map-scale-control leaflet-bar');
+                div.style.pointerEvents = 'none';
+                div.style.zIndex = 10000;
+                this._el = div;
+                this.update();
+                console.log('[MAP_SCALE control] creato');
+                return div;
+            },
+            update: function () {
+                if (!this._el) return;
+                const pxToM = (Math.round(MAP_SCALE * 1000) / 1000).toString().replace('.', ',');
+                this._el.innerHTML = `
+              <div style="padding:6px 10px;">
+                MAP_SCALE: <b>${MAP_SCALE}</b><br>
+                <small>1 px = da 0 a ${pxToM} mt</small>
+              </div>
+          `;
+            }
+        });
+        const ctrl = new MapScaleControl().addTo(map);
+        return ctrl;
+    }
+
+
+    // scalatura dei testi rispetto allo zoom corrente
+    function enableZoomScaledUi(baseZoom) {
+
+        const _baseZoom = (typeof baseZoom === 'number') ? baseZoom : map.getZoom();
+
+        const applyScale = () => {
+            const z = map.getZoom();
+            // fattore di scala relativo al baseZoom
+            const s = map.getZoomScale(z, _baseZoom);
+
+            // scala: textbox, etichette misure, e qualsiasi cosa marchiata zoom-scaled
+            const nodes = document.querySelectorAll(
+                '.zoom-scaled, ' +
+                '.leaflet-tooltip.zoom-scaled, .leaflet-popup .zoom-scaled'
+            );
+            nodes.forEach(el => {
+                el.style.transform = `scale(${s})`;
+                el.style.transformOrigin = 'top left';
+            });
+
+
+        };
+
+
+        map.on('zoom', applyScale);
+        map.on('zoomend', applyScale);
+
+
+        applyScale();
+
+
+        return applyScale;
+    }
+
+
+
+
+    // INIZIALIZZAZIONE MAPPA
+    $(document).ready(function() {
+        let synopticId = null;
+        const parentDocument = window.parent.document;
+        const widgetDiv = parentDocument.getElementById('ExternalContent_4623_widgetExternalContent42709_div');
+        if (widgetDiv) {
+            const synopticUrl = widgetDiv.getAttribute('data-nopointsurl');
+            if (synopticUrl) {
+                synopticId = new URLSearchParams(synopticUrl.split('?')[1]).get('id');
+            }
+        }
+        if (!synopticId) {
+            synopticId = new URLSearchParams(window.parent.location.search).get('synopticId');
+        }
+        if (!synopticId) {
+            console.error('SynopticId non trovato!');
+            return;
+        }
+
+        const imageUrl = img_url + synopticId + '.svg';
+        const imageBounds = [[0, 0], [424.8, 1396.8]];
+
+        map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2,
+            zoomControl: true
+        });
+
+
+//AGGIUNTA DIDASCALIA MAP_SCALE IN BASSO A DESTRA
+        window.mapScaleCtrl = addMapScaleControl();
+        console.log("Eventi Leaflet.draw registrati:");
+        Object.keys(map._events).forEach(eventName => {
+            if (eventName.includes('draw')) {
+                console.log(" -", eventName, ":", map._events[eventName].length, "listener");
+            }
+        });
+
+
+
+        console.log("Leaflet version:", L.version);
+        console.log("Leaflet.draw available:", !!L.Draw);
+        console.log("Draw tools available:", {
+            Rectangle: !!L.Draw.Rectangle,
+            Polygon: !!L.Draw.Polygon,
+            Polyline: !!L.Draw.Polyline,
+            Circle: !!L.Draw.Circle
+        });
+        console.log("[DEBUG] Stato iniziale del layer textBoxes:", map.hasLayer(textBoxes));
+
+
+        L.imageOverlay(imageUrl, imageBounds).addTo(map);
+        map.fitBounds(imageBounds);
+
+
+        const styleTag = document.createElement('style');
+        styleTag.textContent = `.zoom-font { transform: none !important; }`;
+        document.head.appendChild(styleTag);
+
+        function setupZoomFontScaling(baseZoom = map.getZoom()) {
+            const apply = () => {
+                const s = map.getZoomScale(map.getZoom(), baseZoom); // CRS.Simple => 2^(dz)
+                document.querySelectorAll('.zoom-font').forEach(node => {
+                    const base = parseFloat(node.dataset.baseFontPx || 14);
+                    node.style.fontSize = (base * s) + 'px';
+
+                });
+            };
+            map.on('zoom zoomend', apply);
+            apply();
+            window.applyZoomFontScale = apply; //  aggiunta nuove etichette
+        }
+
+        window.applyUiScale = enableZoomScaledUi(map.getZoom());
+
+
+        // INIZIALIZZA
+
+        initTextBoxes();
+        map.addLayer(textBoxes);
+        drawLayer = new L.FeatureGroup();
+        map.addLayer(drawLayer);
+
+        textBoxes.addTo(drawLayer); //AGGIUNTO
+        setupScaledMeasurements();
+
+        setupZoomFontScaling();
+
+        //AGGIUNTO PER MISURE SENZA DISEGNO
+
+        drawLayer.on('layerremove', function(e) {
+            // Quando una figura viene rimossa, cancella le sue misure
+            if (e.layer._measureLabels) {
+                e.layer._measureLabels.forEach(label => {
+                    if (map.hasLayer(label)) map.removeLayer(label);
+                });
+                e.layer._measureLabels = null; // Pulisce il riferimento
+            }
+        });
+        textBoxes = new L.FeatureGroup().addTo(drawLayer);
+
+        // CREAZIONE layer
+        map.on(L.Draw.Event.CREATED, function(e) {
+            const layer = e.layer;
+            drawLayer.addLayer(layer);
+
+            updateMeasurementDisplay(layer);
+
+            layer.on('edit', function() {
+                updateMeasurementDisplay(layer);
+            });
+        });
+
+        setTimeout(() => {
+            console.log(" Caricamento completato");
+            console.log("Leaflet.draw:", !!L.Draw);
+            console.log("GeometryUtil:", !!L.GeometryUtil);
+        }, 2000);
+
+// Dopo che Leaflet.draw è caricato
+        setTimeout(() => {
+            interceptAllDrawTooltips();
+            fixPolygonTooltip();
+
+// Debug aggiuntivo per Polygon
+            if (L.Draw.Polygon) {
+                console.log("Polygon tooltip fix applicato");
+            }
+        }, 1000);
+    });
+</script>
+</body>
+</html>
