@@ -1,8 +1,18 @@
 # ignora tutto
 *
+# Non ignorare le directory
+!*/
 
 # ma non ignorare questo .gitignore
 !.gitignore
+
+# Non ignorare il README
+!README.md
+
+# Non ignorare la cartella img/ e i suoi contenuti
+!img/
+!img/toolbox.png
+!img/mappa_svg.png
 
 # mantieni SOLO questi due sorgenti finali
 !toolbox_definitivo.html
