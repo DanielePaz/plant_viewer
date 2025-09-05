@@ -61,8 +61,7 @@ This project demonstrates how Snap4City can be extended with custom tools for:
 ---
 
 ## Screenshots
-You can add screenshots or animated GIFs to better illustrate the Toolbox and Map interface.  
-Save your images in a dedicated folder (for example `img/`) inside the repository, then reference them in the README using Markdown:
+
 
 ```markdown
 ![Toolbox interface](img/toolbox.png)
